@@ -33,19 +33,26 @@ export default function App() {
 
    useEffect(
       function () {
+         const controller = new AbortController();
+
          async function awaitMovies() {
             try {
                setIsLoading(true);
                setError("");
-               const res = await fetch(`https://www.omdbapi.com/?s=${query}&apikey=${KEY}`);
+               const res = await fetch(`https://www.omdbapi.com/?s=${query}&apikey=${KEY}`, {
+                  signal: controller.signal
+               });
                const data = await res.json();
 
                if (data.Response === "False") throw new Error("Movie not found");
 
                setMovies(data.Search);
+               setError("");
             } catch (err) {
-               console.error(err.message);
-               setError(err.message);
+               if (err.name !== "AbortError") {
+                  console.log(err.message);
+                  setError(err.message);
+               }
             } finally {
                setIsLoading(false);
             }
@@ -57,7 +64,13 @@ export default function App() {
             return;
          }
 
+         handleCloseMovie();
+
          awaitMovies();
+
+         return function () {
+            controller.abort();
+         };
       },
       [query]
    );
@@ -193,7 +206,6 @@ function SelectedMovie({ selectedId, onCloseMovie, onAddWatched, watched }) {
    const [userRating, setUserRating] = useState(0);
 
    const isWatched = watched.map((movie) => movie.imdbID).includes(selectedId);
-   console.log(watched);
    const watchedRating = watched.find((movie) => movie.imdbID === selectedId)?.userRating;
 
    const {
@@ -225,6 +237,21 @@ function SelectedMovie({ selectedId, onCloseMovie, onAddWatched, watched }) {
 
    useEffect(
       function () {
+         function callback(e) {
+            if (e.code === "Escape") onCloseMovie();
+         }
+
+         document.addEventListener("keydown", callback);
+
+         return function () {
+            document.removeEventListener("keydown", callback);
+         };
+      },
+      [onCloseMovie]
+   );
+
+   useEffect(
+      function () {
          setIsLoading(true);
          async function getMovieDetails() {
             const res = await fetch(`https://www.omdbapi.com/?i=${selectedId}&apikey=${KEY}`);
@@ -235,6 +262,18 @@ function SelectedMovie({ selectedId, onCloseMovie, onAddWatched, watched }) {
          getMovieDetails();
       },
       [selectedId]
+   );
+
+   useEffect(
+      function () {
+         if (!title) return;
+         document.title = `Movie | ${title}`;
+
+         return function () {
+            document.title = "FRate";
+         };
+      },
+      [title]
    );
 
    return (
